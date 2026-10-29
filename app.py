@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 
 st.title("Classification Model Demo")
 
-# --- Load and clean dataset automatically ---
+# --- Load dataset automatically ---
 try:
     df = pd.read_csv("test_data.csv")
     st.success("✅ test_data.csv loaded successfully!")
@@ -25,24 +25,29 @@ except FileNotFoundError:
     st.error("❌ test_data.csv not found in the project folder.")
     st.stop()
 
-# --- Ensure 'target' column exists ---
+# --- Check for target column ---
 if "target" not in df.columns:
     st.error("❌ The dataset must contain a 'target' column for evaluation.")
     st.stop()
 
-# --- Preprocessing ---
-# Encode categorical columns
+# --- Clean and preprocess ---
+# Encode categorical columns (features)
 for col in df.select_dtypes(include=["object"]).columns:
     if col != "target":
         df[col] = LabelEncoder().fit_transform(df[col])
 
+# Encode target if categorical
+if df["target"].dtype == "object":
+    df["target"] = LabelEncoder().fit_transform(df["target"])
+
 # Handle missing values
 df = df.fillna(df.mean(numeric_only=True))
 
+# --- Split features and labels ---
 X = df.drop("target", axis=1)
 y = df["target"]
 
-# Sidebar controls
+# --- Sidebar controls ---
 st.sidebar.header("Hyperparameter Tuning")
 knn_k = st.sidebar.slider("K in KNN", 1, 20, 5)
 tree_depth = st.sidebar.slider("Max Depth in Decision Tree", 1, 20, 5)
