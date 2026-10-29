@@ -96,10 +96,11 @@ if uploaded_file is not None:
     test_df = test_df.fillna(test_df.mean(numeric_only=True))
     test_df["target"] = pd.to_numeric(test_df["target"], errors="coerce").fillna(0)
 
-    # ✅ Convert continuous target to binary if needed
+    # ✅ Graceful handling for single-class target
     unique_targets = test_df["target"].unique()
     if len(unique_targets) < 2:
-        st.error("❌ Target column has only one unique value. Classification requires at least two distinct classes.")
+        st.warning("⚠️ Target column has only one unique value. Showing descriptive statistics instead of classification results.")
+        st.write(test_df.describe())
         st.stop()
     elif len(unique_targets) > 2:
         median_val = test_df["target"].median()
