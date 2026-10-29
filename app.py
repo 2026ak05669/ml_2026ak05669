@@ -29,13 +29,6 @@ with st.sidebar:
     st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
     st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
 
-    # Working “Open CSV in new tab” link using base64 encoding
-    with open("test_data.csv", "rb") as f:
-        csv_bytes = f.read()
-        b64 = base64.b64encode(csv_bytes).decode()
-        href = f'<a href="data:text/csv;base64,{b64}" target="_blank">Open CSV in a new tab</a>'
-        st.markdown(href, unsafe_allow_html=True)
-
     st.markdown("### Upload test CSV")
     uploaded_file = st.file_uploader("Drag and drop file here", type=["csv"])
     st.caption("Limit 5MB per file • CSV")
