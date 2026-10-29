@@ -9,127 +9,109 @@ Original file is located at
 
 import streamlit as st
 import pandas as pd
+import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
-import json
-from io import BytesIO
-from matplotlib.backends.backend_pdf import PdfPages
 from sklearn.metrics import (
     confusion_matrix, classification_report, accuracy_score, precision_score,
     recall_score, f1_score, matthews_corrcoef, roc_auc_score, roc_curve
 )
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
 
 st.title("Classification Model Demo")
 
-# Sidebar dataset upload
-st.sidebar.header("Dataset Options")
-uploaded_file = st.sidebar.file_uploader("Upload your dataset CSV", type="csv")
-
-# Sidebar navigation
-view_choice = st.sidebar.radio(
-    "Select View",
-    ["Confusion Matrix", "Classification Report", "Metrics Table", "ROC Curve"]
-)
-
-# Sidebar hyperparameter controls
-st.sidebar.header("Hyperparameter Tuning")
-knn_k = st.sidebar.slider("K in KNN", 1, 20, 5)
-tree_depth = st.sidebar.slider("Max Depth in Decision Tree", 1, 20, 5)
-svm_c = st.sidebar.slider("SVM Regularization (C)", 0.1, 10.0, 1.0)
-log_reg_c = st.sidebar.slider("Logistic Regression (C)", 0.01, 10.0, 1.0)
-
-# Sidebar scaling toggle
-scale_features = st.sidebar.checkbox("Apply Feature Scaling (StandardScaler)", value=True)
-
-# Sidebar train/test split ratio
-split_ratio = st.sidebar.slider("Train/Test Split Ratio (Test Size %)", 10, 50, 20)
-
-# Sidebar metric selection
-st.sidebar.header("Select Metrics to Display")
-selected_metrics = st.sidebar.multiselect(
-    "Choose metrics for summary table",
-    ["Accuracy", "AUC", "Precision", "Recall", "F1", "MCC"],
-    default=["Accuracy", "F1", "MCC"]
-)
-
-# Sidebar model selection for All Models
-st.sidebar.header("Select Models to Compare")
-selected_models = st.sidebar.multiselect(
-    "Choose models for 'All Models' comparison",
-    ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM"],
-    default=["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM"]
-)
-
-# Sidebar save/load configuration
-st.sidebar.header("Save/Load Configuration")
-config_name = st.sidebar.text_input("Configuration Name", "default_config")
-
-if st.sidebar.button("Save Configuration"):
-    config = {
-        "knn_k": knn_k,
-        "tree_depth": tree_depth,
-        "svm_c": svm_c,
-        "log_reg_c": log_reg_c,
-        "scale_features": scale_features,
-        "split_ratio": split_ratio,
-        "selected_metrics": selected_metrics,
-        "selected_models": selected_models,
-        "view_choice": view_choice,
-        "model_choice": st.session_state.get("model_choice", "All Models")
-    }
-    with open(f"{config_name}.json", "w") as f:
-        json.dump(config, f)
-    st.sidebar.success(f"Configuration '{config_name}' saved!")
-
-# Batch load configs
-batch_files = st.sidebar.file_uploader("Batch Load Configurations", type="json", accept_multiple_files=True)
-
-# Sidebar toggles for visualization/export
-show_batch_chart = st.sidebar.checkbox("Show Batch Comparison Chart", value=True)
-export_chart = st.sidebar.checkbox("Enable Chart Export (PNG)", value=True)
-export_pdf = st.sidebar.checkbox("Export All Batch Charts + Tables as PDF", value=True)
-
+uploaded_file = st.file_uploader("Upload test CSV", type="csv")
 model_choice = st.selectbox("Choose Model",
-    ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM", "All Models"],
-    key="model_choice")
+    ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM", "All Models"])
 
-# --- Core evaluation logic ---
-def run_config(config, df):
-    X = df.drop("target", axis=1)
-    y = df["target"]
+if uploaded_file:
+    test_data = pd.read_csv(uploaded_file)
+    X_test = test_data.drop("target", axis=1)
+    y_test = test_data["target"]
 
-    # Train/test split
-    test_size = config["split_ratio"] / 100.0
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+    models = ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM"]
 
-    # Scaling
-    if config["scale_features"]:
-        scaler = StandardScaler()
-        X_train = scaler.fit_transform(X_train)
-        X_test = scaler.transform(X_test)
+    if model_choice == "All Models":
+        results = []
+        for m in models:
+            st.subheader(f"{m}")
+            model = joblib.load(f"model/{m.replace(' ', '_')}.joblib")
+            y_pred = model.predict(X_test)
 
-    # Define models
-    models_dict = {
-        "Logistic Regression": LogisticRegression(C=config["log_reg_c"], max_iter=1000),
-        "Decision Tree": DecisionTreeClassifier(max_depth=config["tree_depth"]),
-        "KNN": KNeighborsClassifier(n_neighbors=config["knn_k"]),
-        "Naive Bayes": GaussianNB(),
-        "SVM": SVC(C=config["svm_c"], probability=True)
-    }
+            # Confusion Matrix
+            cm = confusion_matrix(y_test, y_pred)
+            fig, ax = plt.subplots()
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+            ax.set_xlabel("Predicted")
+            ax.set_ylabel("Actual")
+            ax.set_title(f"Confusion Matrix - {m}")
+            st.pyplot(fig)
 
-    def evaluate_model(name, model, X_train, y_train, X_test, y_test):
-        model.fit(X_train, y_train)
+            # Classification Report
+            st.text("Classification Report:")
+            st.text(classification_report(y_test, y_pred))
+
+            # Metrics summary
+            y_prob = model.predict_proba(X_test)[:,1] if hasattr(model, "predict_proba") else None
+            metrics = {
+                "Model": m,
+                "Accuracy": accuracy_score(y_test, y_pred),
+                "AUC": roc_auc_score(y_test, y_prob) if y_prob is not None else "N/A",
+                "Precision": precision_score(y_test, y_pred, average="weighted"),
+                "Recall": recall_score(y_test, y_pred, average="weighted"),
+                "F1": f1_score(y_test, y_pred, average="weighted"),
+                "MCC": matthews_corrcoef(y_test, y_pred)
+            }
+            results.append(metrics)
+
+            # ROC Curve (only if probability available)
+            if y_prob is not None:
+                fpr, tpr, _ = roc_curve(y_test, y_prob)
+                fig, ax = plt.subplots()
+                ax.plot(fpr, tpr, label=f"{m} (AUC = {metrics['AUC']:.2f})")
+                ax.plot([0,1],[0,1],'k--')
+                ax.set_xlabel("False Positive Rate")
+                ax.set_ylabel("True Positive Rate")
+                ax.set_title(f"ROC Curve - {m}")
+                ax.legend(loc="lower right")
+                st.pyplot(fig)
+
+        # Show summary table
+        summary_df = pd.DataFrame(results)
+        st.subheader("Summary Comparison Table")
+        st.dataframe(summary_df)
+
+        # Download button
+        csv = summary_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Summary Table as CSV",
+            data=csv,
+            file_name="model_comparison_summary.csv",
+            mime="text/csv"
+        )
+
+    else:
+        model = joblib.load(f"model/{model_choice.replace(' ', '_')}.joblib")
         y_pred = model.predict(X_test)
+
+        st.subheader(f"{model_choice} Results")
+
+        # Confusion Matrix
+        cm = confusion_matrix(y_test, y_pred)
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
+        ax.set_title(f"Confusion Matrix - {model_choice}")
+        st.pyplot(fig)
+
+        # Classification Report
+        st.text("Classification Report:")
+        st.text(classification_report(y_test, y_pred))
+
+        # Metrics summary
         y_prob = model.predict_proba(X_test)[:,1] if hasattr(model, "predict_proba") else None
         metrics = {
-            "Model": name,
+            "Model": model_choice,
             "Accuracy": accuracy_score(y_test, y_pred),
             "AUC": roc_auc_score(y_test, y_prob) if y_prob is not None else "N/A",
             "Precision": precision_score(y_test, y_pred, average="weighted"),
@@ -137,83 +119,27 @@ def run_config(config, df):
             "F1": f1_score(y_test, y_pred, average="weighted"),
             "MCC": matthews_corrcoef(y_test, y_pred)
         }
-        return metrics
+        summary_df = pd.DataFrame([metrics])
+        st.subheader("Metrics Summary")
+        st.write(summary_df)
 
-    results = []
-    for m in config["selected_models"]:
-        model = models_dict[m]
-        metrics = evaluate_model(m, model, X_train, y_train, X_test, y_test)
-        results.append(metrics)
+        # Download button
+        csv = summary_df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Metrics as CSV",
+            data=csv,
+            file_name=f"{model_choice}_metrics_summary.csv",
+            mime="text/csv"
+        )
 
-    summary_df = pd.DataFrame(results)[["Model"] + config["selected_metrics"]]
-    return summary_df
-
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-
-    # Run batch configs if provided
-    if batch_files:
-        st.subheader("Batch Configuration Results")
-        batch_results = {}
-        for file in batch_files:
-            config = json.load(file)
-            summary_df = run_config(config, df)
-            batch_results[file.name] = summary_df
-            st.write(f"Configuration: {file.name}")
-            st.dataframe(summary_df)
-
-        # Combined bar chart visualization + PDF export
-        if show_batch_chart:
-            st.subheader("Batch Comparison Chart")
-            combined = []
-            for cfg_name, df_res in batch_results.items():
-                df_res["Config"] = cfg_name
-                combined.append(df_res)
-            combined_df = pd.concat(combined)
-
-            pdf_buf = BytesIO()
-            with PdfPages(pdf_buf) as pdf:
-                for metric in selected_metrics:
-                    fig, ax = plt.subplots()
-                    sns.barplot(data=combined_df, x="Model", y=metric, hue="Config", ax=ax)
-                    ax.set_title(f"{metric} Comparison Across Configurations")
-                    st.pyplot(fig)
-
-                    # Export chart as PNG
-                    if export_chart:
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png")
-                        st.download_button(
-                            label=f"Download {metric} Chart as PNG",
-                            data=buf.getvalue(),
-                            file_name=f"{metric}_comparison.png",
-                            mime="image/png"
-                        )
-
-                    # Add chart to PDF
-                    if export_pdf:
-                        pdf.savefig(fig)
-                    plt.close(fig)
-
-                # Add tables to PDF
-                if export_pdf:
-                    for cfg_name, df_res in batch_results.items():
-                        fig, ax = plt.subplots(figsize=(8, 2))
-                        ax.axis("off")
-                        table = ax.table(cellText=df_res.values,
-                                         colLabels=df_res.columns,
-                                         loc="center")
-                        table.auto_set_font_size(False)
-                        table.set_fontsize(8)
-                        table.scale(1.2, 1.2)
-                        ax.set_title(f"Metrics Table - {cfg_name}")
-                        pdf.savefig(fig)
-                        plt.close(fig)
-
-            if export_pdf:
-                st.download_button(
-                    label="Download All Charts + Tables as PDF",
-                    data=pdf_buf.getvalue(),
-                    file_name="batch_comparison_report.pdf",
-                    mime="application/pdf"
-                )
+        # ROC Curve (only if probability available)
+        if y_prob is not None:
+            fpr, tpr, _ = roc_curve(y_test, y_prob)
+            fig, ax = plt.subplots()
+            ax.plot(fpr, tpr, label=f"{model_choice} (AUC = {metrics['AUC']:.2f})")
+            ax.plot([0,1],[0,1],'k--')
+            ax.set_xlabel("False Positive Rate")
+            ax.set_ylabel("True Positive Rate")
+            ax.set_title(f"ROC Curve - {model_choice}")
+            ax.legend(loc="lower right")
+            st.pyplot(fig)
