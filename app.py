@@ -28,7 +28,7 @@ with st.sidebar:
     st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
     st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
 
-    # Proper "Open CSV in new tab" link using base64 encoding
+    # ✅ Working “Open CSV in new tab” link using base64 encoding
     with open("test_data.csv", "rb") as f:
         csv_bytes = f.read()
         b64 = base64.b64encode(csv_bytes).decode()
@@ -96,7 +96,7 @@ if uploaded_file is not None:
     test_df = test_df.fillna(test_df.mean(numeric_only=True))
     test_df["target"] = pd.to_numeric(test_df["target"], errors="coerce").fillna(0)
 
-    # --- Convert target to binary if continuous ---
+    # ✅ Convert continuous target to binary for classification
     if len(test_df["target"].unique()) > 2:
         median_val = test_df["target"].median()
         test_df["target"] = (test_df["target"] >= median_val).astype(int)
@@ -164,4 +164,28 @@ if uploaded_file is not None:
         ax.set_title(f"{metric} Comparison Across Models")
         ax.set_ylabel(metric)
         ax.set_xlabel("Model")
-        st.pyplot
+        st.pyplot(fig)
+
+    # --- Confusion matrices ---
+    st.markdown("### 🔢 Confusion Matrices")
+    for name, report in reports.items():
+        st.write(f"**{name}**")
+        cm = report["Confusion Matrix"]
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
+        st.pyplot(fig)
+
+    # --- Classification reports ---
+    st.markdown("### 🧾 Classification Reports")
+    for name, report in reports.items():
+        st.write(f"**{name}**")
+        st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
+
+    st.info("✅ Evaluation complete! Metrics, charts, confusion matrices, and classification reports displayed for all models.")
+else:
+    st.warning("Please upload your test_data.csv file to begin evaluation.")
+
+st.markdown("---")
+st.markdown("Built with ❤️ using Streamlit")
