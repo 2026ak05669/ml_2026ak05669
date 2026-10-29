@@ -3,18 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
-from sklearn.svm import SVC, SVR
+from sklearn.svm import SVC
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
-    matthews_corrcoef, roc_auc_score, confusion_matrix, classification_report,
-    mean_squared_error, r2_score
+    matthews_corrcoef, roc_auc_score, confusion_matrix, classification_report
 )
 import base64
-import numpy as np
 
 # --- Page setup ---
 st.set_page_config(page_title="ML Assignment 2 - 2026AK05669", layout="wide")
@@ -30,7 +28,7 @@ with st.sidebar:
     st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
     st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
 
-    # ✅ Working “Open CSV in new tab” link using base64 encoding
+    # Working “Open CSV in new tab” link using base64 encoding
     with open("test_data.csv", "rb") as f:
         csv_bytes = f.read()
         b64 = base64.b64encode(csv_bytes).decode()
@@ -44,22 +42,22 @@ with st.sidebar:
     st.caption("Limit 5MB per file • CSV")
 
 # --- Main content ---
-st.markdown("## 🧠 Machine Learning / Classification & Regression")
+st.markdown("## 🧠 Machine Learning / Classification")
 st.title("ML Assignment 2 • 2026AK05669")
-st.subheader("Dataset: UCI Websites to Check Wine Quality")
+st.subheader("Dataset: UCI Phishing Websites")
 
 st.markdown("""
-Compare five models, explore prediction errors, and evaluate saved models on labeled test data.
+Compare five classifiers, explore prediction errors, and evaluate saved models on labeled test data.
 """)
 
 # --- Dataset summary cards ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Full source dataset", "6,497 rows")
+    st.metric("Full source dataset", "11,055 rows")
 with col2:
-    st.metric("Used for training", "1,300 rows")
+    st.metric("Used for training", "8,841 rows")
 with col3:
-    st.metric("Reserved for testing", "1,300 rows")
+    st.metric("Reserved for testing", "2,214 rows")
 
 st.markdown("""
 The models learned from the training rows. The downloadable sample contains the reserved test rows.
@@ -70,9 +68,9 @@ Upload a labeled test CSV to evaluate the saved models.
 with st.expander("📘 How the dataset is used"):
     st.write("""
     - The dataset is split into training and testing subsets.
-    - Training data is used to fit five models.
+    - Training data is used to fit five classification models.
     - Testing data is reserved for evaluation and comparison.
-    - Each model is assessed using appropriate metrics for classification or regression.
+    - Each model is assessed using six metrics: Accuracy, Precision, Recall, F1, MCC, and AUC.
     """)
 
 # --- Evaluation section ---
@@ -98,101 +96,61 @@ if uploaded_file is not None:
     test_df = test_df.fillna(test_df.mean(numeric_only=True))
     test_df["target"] = pd.to_numeric(test_df["target"], errors="coerce").fillna(0)
 
+    unique_targets = test_df["target"].unique()
+    if len(unique_targets) < 2:
+        st.warning("⚠️ Target column has only one unique value. Showing descriptive statistics instead of classification results.")
+        st.write(test_df.describe())
+        st.stop()
+
     X = test_df.drop("target", axis=1)
     y = test_df["target"]
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # --- Detect classification vs regression ---
-    unique_targets = np.unique(y)
-    if len(unique_targets) < 2:
-        st.warning("⚠️ Target column has only one unique value. Showing descriptive statistics instead of model results.")
-        st.write(test_df.describe())
-        st.stop()
-    elif len(unique_targets) <= 10 and all(y.astype(int) == y):
-        mode = "classification"
-        st.info("🔍 Detected Classification Task")
-    else:
-        mode = "regression"
-        st.info("📈 Detected Regression Task")
+    # --- Define models ---
+    models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Decision Tree": DecisionTreeClassifier(),
+        "KNN": KNeighborsClassifier(),
+        "Naive Bayes": GaussianNB(),
+        "SVM": SVC(probability=True)
+    }
 
     results = []
     reports = {}
 
-    # --- Define models based on mode ---
-    if mode == "classification":
-        models = {
-            "Logistic Regression": LogisticRegression(max_iter=1000),
-            "Decision Tree": DecisionTreeClassifier(),
-            "KNN": KNeighborsClassifier(),
-            "Naive Bayes": GaussianNB(),
-            "SVM": SVC(probability=True)
+    # --- Evaluate each model ---
+    for name, model in models.items():
+        model.fit(X_scaled, y)
+        y_pred = model.predict(X_scaled)
+        y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+
+        metrics = {
+            "Model": name,
+            "Accuracy": accuracy_score(y, y_pred),
+            "AUC": roc_auc_score(y, y_prob) if y_prob is not None else "N/A",
+            "Precision": precision_score(y, y_pred, average="weighted"),
+            "Recall": recall_score(y, y_pred, average="weighted"),
+            "F1": f1_score(y, y_pred, average="weighted"),
+            "MCC": matthews_corrcoef(y, y_pred)
+        }
+        results.append(metrics)
+
+        reports[name] = {
+            "Confusion Matrix": confusion_matrix(y, y_pred),
+            "Classification Report": classification_report(y, y_pred, output_dict=True),
+            "Metrics": metrics
         }
 
-        for name, model in models.items():
-            try:
-                model.fit(X_scaled, y)
-                y_pred = model.predict(X_scaled)
-                y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
-
-                metrics = {
-                    "Model": name,
-                    "Accuracy": accuracy_score(y, y_pred),
-                    "Precision": precision_score(y, y_pred, average="weighted"),
-                    "Recall": recall_score(y, y_pred, average="weighted"),
-                    "F1 Score": f1_score(y, y_pred, average="weighted"),
-                    "MCC": matthews_corrcoef(y, y_pred),
-                    "AUC": roc_auc_score(y, y_prob) if y_prob is not None else "N/A"
-                }
-                results.append(metrics)
-
-                reports[name] = {
-                    "Confusion Matrix": confusion_matrix(y, y_pred),
-                    "Classification Report": classification_report(y, y_pred, output_dict=True)
-                }
-            except ValueError as e:
-                st.error(f"⚠️ {name} could not be trained: {e}")
-
-    else:  # Regression mode
-        models = {
-            "Linear Regression": LinearRegression(),
-            "Decision Tree Regressor": DecisionTreeRegressor(),
-            "KNN Regressor": KNeighborsRegressor(),
-            "SVM Regressor": SVR(),
-            "Naive Bayes (Gaussian)": GaussianNB()  # fallback for numeric data
-        }
-
-        for name, model in models.items():
-            try:
-                model.fit(X_scaled, y)
-                y_pred = model.predict(X_scaled)
-                metrics = {
-                    "Model": name,
-                    "RMSE": np.sqrt(mean_squared_error(y, y_pred)),
-                    "R² Score": r2_score(y, y_pred)
-                }
-                results.append(metrics)
-            except ValueError as e:
-                st.error(f"⚠️ {name} could not be trained: {e}")
-
-    # --- Display results ---
-    st.markdown("### 📊 Evaluation Metrics Across Models")
+    # --- Comparison table ---
+    st.markdown("### 📊 Model Comparison Across Metrics")
     results_df = pd.DataFrame(results)
     st.dataframe(results_df)
 
-    # --- Download results ---
-    csv_data = results_df.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="⬇️ Download Evaluation Results (CSV)",
-        data=csv_data,
-        file_name="evaluation_results.csv",
-        mime="text/csv"
-    )
-
     # --- Visual comparison charts ---
     st.markdown("### 📈 Visual Comparison Charts")
-    for metric in results_df.columns[1:]:
+    for metric in ["Accuracy", "AUC", "Precision", "Recall", "F1", "MCC"]:
         fig, ax = plt.subplots()
         sns.barplot(data=results_df, x="Model", y=metric, palette="coolwarm", ax=ax)
         ax.set_title(f"{metric} Comparison Across Models")
@@ -200,14 +158,39 @@ if uploaded_file is not None:
         ax.set_xlabel("Model")
         st.pyplot(fig)
 
-    # --- Classification reports (only for classification mode) ---
-    if mode == "classification":
-        st.markdown("### 🧾 Classification Reports")
-        for name, report in reports.items():
-            st.write(f"**{name}**")
-            st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
+    # --- Closer Look Section ---
+    st.markdown("## 🔍 02 / Look Closer")
+    selected_model = st.selectbox("Select a model to inspect", list(models.keys()))
 
-    st.info("✅ Evaluation complete! Metrics, charts, and reports displayed for all models.")
+    model_metrics = reports[selected_model]["Metrics"]
+    st.markdown(f"### {selected_model}: evaluation metrics")
+    st.caption("Precision, recall and F1 use Phishing (1) as the positive class. AUC uses continuous scores.")
+
+    # Display metric cards
+    metric_cols = st.columns(3)
+    metric_cols[0].metric("Accuracy", f"{model_metrics['Accuracy']:.4f}")
+    metric_cols[1].metric("AUC", f"{model_metrics['AUC']:.4f}")
+    metric_cols[2].metric("Precision", f"{model_metrics['Precision']:.4f}")
+
+    metric_cols2 = st.columns(3)
+    metric_cols2[0].metric("Recall", f"{model_metrics['Recall']:.4f}")
+    metric_cols2[1].metric("F1", f"{model_metrics['F1']:.4f}")
+    metric_cols2[2].metric("MCC", f"{model_metrics['MCC']:.4f}")
+
+    # --- Confusion Matrix ---
+    st.markdown("### 🔢 Confusion Matrix")
+    cm = reports[selected_model]["Confusion Matrix"]
+    fig, ax = plt.subplots()
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    st.pyplot(fig)
+
+    # --- Classification Report ---
+    st.markdown("### 🧾 Classification Report")
+    st.dataframe(pd.DataFrame(reports[selected_model]["Classification Report"]).transpose())
+
+    st.info("✅ Evaluation complete! Comparison, detailed metrics, confusion matrix, and classification report displayed.")
 else:
     st.warning("Please upload your test_data.csv file to begin evaluation.")
 
