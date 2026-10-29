@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -44,7 +45,7 @@ with st.sidebar:
 # --- Main content ---
 st.markdown("## 🧠 Machine Learning / Classification")
 st.title("ML Assignment 2 • 2026AK05669")
-st.subheader("Dataset: UCI Phishing Websites")
+st.subheader("Dataset: UCI Wine Quality")
 
 st.markdown("""
 Compare five classifiers, explore prediction errors, and evaluate saved models on labeled test data.
@@ -53,11 +54,11 @@ Compare five classifiers, explore prediction errors, and evaluate saved models o
 # --- Dataset summary cards ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Full source dataset", "11,055 rows")
+    st.metric("Full source dataset", "6,497 rows")
 with col2:
-    st.metric("Used for training", "8,841 rows")
+    st.metric("Used for training", "1,300 rows")
 with col3:
-    st.metric("Reserved for testing", "2,214 rows")
+    st.metric("Reserved for testing", "1,300 rows")
 
 st.markdown("""
 The models learned from the training rows. The downloadable sample contains the reserved test rows.
@@ -108,6 +109,9 @@ if uploaded_file is not None:
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
+    # --- Train-test split for realistic evaluation ---
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42, stratify=y)
+
     # --- Define models ---
     models = {
         "Logistic Regression": LogisticRegression(max_iter=1000),
@@ -122,24 +126,24 @@ if uploaded_file is not None:
 
     # --- Evaluate each model ---
     for name, model in models.items():
-        model.fit(X_scaled, y)
-        y_pred = model.predict(X_scaled)
-        y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
 
         metrics = {
             "Model": name,
-            "Accuracy": accuracy_score(y, y_pred),
-            "AUC": roc_auc_score(y, y_prob) if y_prob is not None else "N/A",
-            "Precision": precision_score(y, y_pred, average="weighted"),
-            "Recall": recall_score(y, y_pred, average="weighted"),
-            "F1": f1_score(y, y_pred, average="weighted"),
-            "MCC": matthews_corrcoef(y, y_pred)
+            "Accuracy": accuracy_score(y_test, y_pred),
+            "AUC": roc_auc_score(y_test, y_prob) if y_prob is not None else "N/A",
+            "Precision": precision_score(y_test, y_pred, average="weighted"),
+            "Recall": recall_score(y_test, y_pred, average="weighted"),
+            "F1": f1_score(y_test, y_pred, average="weighted"),
+            "MCC": matthews_corrcoef(y_test, y_pred)
         }
         results.append(metrics)
 
         reports[name] = {
-            "Confusion Matrix": confusion_matrix(y, y_pred),
-            "Classification Report": classification_report(y, y_pred, output_dict=True),
+            "Confusion Matrix": confusion_matrix(y_test, y_pred),
+            "Classification Report": classification_report(y_test, y_pred, output_dict=True),
             "Metrics": metrics
         }
 
@@ -164,7 +168,7 @@ if uploaded_file is not None:
 
     model_metrics = reports[selected_model]["Metrics"]
     st.markdown(f"### {selected_model}: evaluation metrics")
-    st.caption("Precision, recall and F1 use Phishing (1) as the positive class. AUC uses continuous scores.")
+    st.caption("Precision, recall and F1 use class 1 as the positive class. AUC uses continuous scores.")
 
     # Display metric cards
     metric_cols = st.columns(3)
