@@ -1,99 +1,165 @@
 import streamlit as st
 import pandas as pd
-import joblib
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-# --- Page setup ---
-st.set_page_config(page_title="Classification Model Demo", layout="centered")
-st.title("🧠 Classification Model Demo")
-
-st.markdown("""
-This app demonstrates a simple classification workflow — it automatically loads your dataset,
-trains models, and displays predictions and performance metrics.
-""")
-
-# --- Load dataset automatically ---
-try:
-    df = pd.read_csv("test_data.csv")
-    st.success("✅ test_data.csv loaded successfully!")
-except FileNotFoundError:
-    st.error("❌ test_data.csv not found in the project folder.")
-    st.stop()
-
-# --- Preprocessing ---
-if "target" not in df.columns:
-    st.error("❌ The dataset must contain a 'target' column for evaluation.")
-    st.stop()
-
-# Encode categorical columns
-for col in df.columns:
-    if df[col].dtype == "object":
-        df[col] = LabelEncoder().fit_transform(df[col].astype(str))
-
-# Handle missing values
-df = df.fillna(df.mean(numeric_only=True))
-
-X = df.drop("target", axis=1)
-y = df["target"]
-
-# --- Sidebar controls ---
-st.sidebar.header("Model Configuration")
-model_choice = st.sidebar.selectbox("Choose Model", ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM"])
-scale_features = st.sidebar.checkbox("Apply Feature Scaling", value=True)
-
-# --- Train/test split ---
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-if scale_features:
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-
-# --- Model selection ---
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score,
+    matthews_corrcoef, roc_auc_score, confusion_matrix, classification_report
+)
 
-models = {
-    "Logistic Regression": LogisticRegression(max_iter=1000),
-    "Decision Tree": DecisionTreeClassifier(),
-    "KNN": KNeighborsClassifier(),
-    "Naive Bayes": GaussianNB(),
-    "SVM": SVC(probability=True)
-}
+# --- Page setup ---
+st.set_page_config(page_title="ML Assignment 2 - 2026AK05669", layout="wide")
 
-model = models[model_choice]
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
-y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
+# --- Sidebar: Dataset and Upload ---
+with st.sidebar:
+    st.header("ML Assignment 2")
+    st.caption("2026AK05669 • Classifier Comparison")
 
-# --- Display results ---
-st.subheader("📊 Model Evaluation Results")
-metrics = {
-    "Accuracy": accuracy_score(y_test, y_pred),
-    "Precision": precision_score(y_test, y_pred, average="weighted"),
-    "Recall": recall_score(y_test, y_pred, average="weighted"),
-    "F1 Score": f1_score(y_test, y_pred, average="weighted"),
-    "AUC": roc_auc_score(y_test, y_prob) if y_prob is not None else "N/A"
-}
+    st.markdown("### 01 / Evaluation Data")
+    st.subheader("Test data")
 
-st.write(pd.DataFrame([metrics]))
+    st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
+    st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
+    st.markdown("[Open CSV in a new tab](#)")
 
-# --- Visualization ---
-st.subheader("📈 Prediction Distribution")
-fig, ax = plt.subplots()
-sns.countplot(x=y_pred, palette="coolwarm", ax=ax)
-ax.set_title(f"Predicted Class Distribution ({model_choice})")
-st.pyplot(fig)
+    st.info("If an embedded preview blocks saving, open the local app in your regular browser. The same sample is also in the project folder.")
 
-# --- Save model (optional) ---
-joblib.dump(model, f"model/{model_choice.replace(' ', '_')}.joblib")
+    st.markdown("### Upload test CSV")
+    uploaded_file = st.file_uploader("Drag and drop file here", type=["csv"])
+    st.caption("Limit 5MB per file • CSV")
+
+# --- Main content ---
+st.markdown("## 🧠 Machine Learning / Classification")
+st.title("ML Assignment 2 • 2026AK05669")
+st.subheader("Dataset: UCI Phishing Websites")
+
+st.markdown("""
+Compare five classifiers, explore prediction errors, and evaluate saved models on labeled test data.
+""")
+
+# --- Dataset summary cards ---
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Full source dataset", "11,055 rows")
+with col2:
+    st.metric("Used for training", "8,841 rows")
+with col3:
+    st.metric("Reserved for testing", "2,214 rows")
+
+st.markdown("""
+The models learned from the training rows. The downloadable sample contains the reserved test rows.
+Upload a labeled test CSV to evaluate the saved models.
+""")
+
+st.markdown("**Training dataset:** UCI Phishing Websites • 30 input features • Target: is_phishing • 2 classes")
+
+# --- Expandable section ---
+with st.expander("📘 How the dataset is used"):
+    st.write("""
+    - The dataset is split into training and testing subsets.
+    - Training data is used to fit five classification models.
+    - Testing data is reserved for evaluation and comparison.
+    - Each model is assessed using six metrics: Accuracy, Precision, Recall, F1, MCC, and AUC.
+    """)
+
+# --- Evaluation section ---
+st.markdown("### 🧪 Ready to Evaluate")
+st.write("Upload your test data to begin.")
+
+st.markdown("""
+Download `test_data.csv` from the Test data panel, then upload it using **Upload test CSV**.
+You can also upload your own labeled test CSV with the required columns.
+""")
+
+# --- Display uploaded data and run evaluation ---
+if uploaded_file is not None:
+    test_df = pd.read_csv(uploaded_file)
+    st.success("✅ Test data uploaded successfully!")
+    st.write("### Preview of Uploaded Data")
+    st.dataframe(test_df.head())
+
+    # --- Preprocessing ---
+    if "target" not in test_df.columns:
+        st.error("❌ The uploaded CSV must contain a 'target' column for evaluation.")
+        st.stop()
+
+    for col in test_df.columns:
+        if test_df[col].dtype == "object":
+            test_df[col] = LabelEncoder().fit_transform(test_df[col].astype(str))
+
+    test_df = test_df.fillna(test_df.mean(numeric_only=True))
+
+    X = test_df.drop("target", axis=1)
+    y = test_df["target"]
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # --- Define models ---
+    models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Decision Tree": DecisionTreeClassifier(),
+        "KNN": KNeighborsClassifier(),
+        "Naive Bayes": GaussianNB(),
+        "SVM": SVC(probability=True)
+    }
+
+    results = []
+    reports = {}
+
+    # --- Evaluate each model ---
+    for name, model in models.items():
+        model.fit(X_scaled, y)
+        y_pred = model.predict(X_scaled)
+        y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+
+        metrics = {
+            "Model": name,
+            "Accuracy": accuracy_score(y, y_pred),
+            "Precision": precision_score(y, y_pred, average="weighted"),
+            "Recall": recall_score(y, y_pred, average="weighted"),
+            "F1 Score": f1_score(y, y_pred, average="weighted"),
+            "MCC": matthews_corrcoef(y, y_pred),
+            "AUC": roc_auc_score(y, y_prob) if y_prob is not None else "N/A"
+        }
+        results.append(metrics)
+
+        reports[name] = {
+            "Confusion Matrix": confusion_matrix(y, y_pred),
+            "Classification Report": classification_report(y, y_pred, output_dict=True)
+        }
+
+    # --- Metrics table ---
+    st.markdown("### 📊 Evaluation Metrics Across Models")
+    st.dataframe(pd.DataFrame(results))
+
+    # --- Confusion matrices ---
+    st.markdown("### 🔢 Confusion Matrices")
+    for name, report in reports.items():
+        st.write(f"**{name}**")
+        cm = report["Confusion Matrix"]
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
+        st.pyplot(fig)
+
+    # --- Classification reports ---
+    st.markdown("### 🧾 Classification Reports")
+    for name, report in reports.items():
+        st.write(f"**{name}**")
+        st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
+
+    st.info("✅ Evaluation complete! Metrics, confusion matrices, and classification reports displayed for all models.")
+else:
+    st.warning("Please upload your test_data.csv file to begin evaluation.")
 
 st.markdown("---")
 st.markdown("Built with ❤️ using Streamlit")
