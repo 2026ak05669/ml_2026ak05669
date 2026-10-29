@@ -12,6 +12,7 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     matthews_corrcoef, roc_auc_score, confusion_matrix, classification_report
 )
+import base64
 
 # --- Page setup ---
 st.set_page_config(page_title="ML Assignment 2 - 2026AK05669", layout="wide")
@@ -26,7 +27,13 @@ with st.sidebar:
 
     st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
     st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
-    st.markdown("[Open CSV in a new tab](test_data.csv)", unsafe_allow_html=True)
+
+    # Proper "Open CSV in new tab" link using base64 encoding
+    with open("test_data.csv", "rb") as f:
+        csv_bytes = f.read()
+        b64 = base64.b64encode(csv_bytes).decode()
+        href = f'<a href="data:file/csv;base64,{b64}" target="_blank">Open CSV in a new tab</a>'
+        st.markdown(href, unsafe_allow_html=True)
 
     st.info("If an embedded preview blocks saving, open the local app in your regular browser. The same sample is also in the project folder.")
 
@@ -88,6 +95,12 @@ if uploaded_file is not None:
     test_df = test_df.replace([float("inf"), float("-inf")], pd.NA)
     test_df = test_df.fillna(test_df.mean(numeric_only=True))
     test_df["target"] = pd.to_numeric(test_df["target"], errors="coerce").fillna(0)
+
+    # --- Convert target to binary if continuous ---
+    if len(test_df["target"].unique()) > 2:
+        median_val = test_df["target"].median()
+        test_df["target"] = (test_df["target"] >= median_val).astype(int)
+        st.warning("Target column converted to binary (>= median → 1, < median → 0) for classification.")
 
     X = test_df.drop("target", axis=1)
     y = test_df["target"]
@@ -151,28 +164,4 @@ if uploaded_file is not None:
         ax.set_title(f"{metric} Comparison Across Models")
         ax.set_ylabel(metric)
         ax.set_xlabel("Model")
-        st.pyplot(fig)
-
-    # --- Confusion matrices ---
-    st.markdown("### 🔢 Confusion Matrices")
-    for name, report in reports.items():
-        st.write(f"**{name}**")
-        cm = report["Confusion Matrix"]
-        fig, ax = plt.subplots()
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-        ax.set_xlabel("Predicted")
-        ax.set_ylabel("Actual")
-        st.pyplot(fig)
-
-    # --- Classification reports ---
-    st.markdown("### 🧾 Classification Reports")
-    for name, report in reports.items():
-        st.write(f"**{name}**")
-        st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
-
-    st.info("✅ Evaluation complete! Metrics, charts, confusion matrices, and classification reports displayed for all models.")
-else:
-    st.warning("Please upload your test_data.csv file to begin evaluation.")
-
-st.markdown("---")
-st.markdown("Built with ❤️ using Streamlit")
+        st.pyplot
