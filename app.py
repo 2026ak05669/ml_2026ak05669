@@ -3,7 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -27,7 +26,7 @@ with st.sidebar:
 
     st.markdown("Download a matching test sample or upload labeled test data for evaluation.")
     st.download_button("⬇️ Download test_data.csv", data=open("test_data.csv", "rb"), file_name="test_data.csv")
-    st.markdown("[Open CSV in a new tab](#)")
+    st.markdown("[Open CSV in a new tab](test_data.csv)", unsafe_allow_html=True)
 
     st.info("If an embedded preview blocks saving, open the local app in your regular browser. The same sample is also in the project folder.")
 
@@ -38,7 +37,7 @@ with st.sidebar:
 # --- Main content ---
 st.markdown("## 🧠 Machine Learning / Classification")
 st.title("ML Assignment 2 • 2026AK05669")
-st.subheader("Dataset: UCI Phishing Websites")
+st.subheader("Dataset: UCI Websites to Check Wine Quality")
 
 st.markdown("""
 Compare five classifiers, explore prediction errors, and evaluate saved models on labeled test data.
@@ -47,18 +46,16 @@ Compare five classifiers, explore prediction errors, and evaluate saved models o
 # --- Dataset summary cards ---
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Full source dataset", "11,055 rows")
+    st.metric("Full source dataset", "6,497 rows")
 with col2:
-    st.metric("Used for training", "8,841 rows")
+    st.metric("Used for training", "1,300 rows")
 with col3:
-    st.metric("Reserved for testing", "2,214 rows")
+    st.metric("Reserved for testing", "1,300 rows")
 
 st.markdown("""
 The models learned from the training rows. The downloadable sample contains the reserved test rows.
 Upload a labeled test CSV to evaluate the saved models.
 """)
-
-st.markdown("**Training dataset:** UCI Phishing Websites • 30 input features • Target: is_phishing • 2 classes")
 
 # --- Expandable section ---
 with st.expander("📘 How the dataset is used"):
@@ -73,12 +70,6 @@ with st.expander("📘 How the dataset is used"):
 st.markdown("### 🧪 Ready to Evaluate")
 st.write("Upload your test data to begin.")
 
-st.markdown("""
-Download `test_data.csv` from the Test data panel, then upload it using **Upload test CSV**.
-You can also upload your own labeled test CSV with the required columns.
-""")
-
-# --- Display uploaded data and run evaluation ---
 if uploaded_file is not None:
     test_df = pd.read_csv(uploaded_file)
     st.success("✅ Test data uploaded successfully!")
@@ -94,7 +85,9 @@ if uploaded_file is not None:
         if test_df[col].dtype == "object":
             test_df[col] = LabelEncoder().fit_transform(test_df[col].astype(str))
 
+    test_df = test_df.replace([float("inf"), float("-inf")], pd.NA)
     test_df = test_df.fillna(test_df.mean(numeric_only=True))
+    test_df["target"] = pd.to_numeric(test_df["target"], errors="coerce").fillna(0)
 
     X = test_df.drop("target", axis=1)
     y = test_df["target"]
@@ -138,7 +131,27 @@ if uploaded_file is not None:
 
     # --- Metrics table ---
     st.markdown("### 📊 Evaluation Metrics Across Models")
-    st.dataframe(pd.DataFrame(results))
+    results_df = pd.DataFrame(results)
+    st.dataframe(results_df)
+
+    # --- Download results ---
+    csv_data = results_df.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="⬇️ Download Evaluation Results (CSV)",
+        data=csv_data,
+        file_name="evaluation_results.csv",
+        mime="text/csv"
+    )
+
+    # --- Visual comparison charts ---
+    st.markdown("### 📈 Visual Comparison Charts")
+    for metric in ["Accuracy", "F1 Score", "AUC"]:
+        fig, ax = plt.subplots()
+        sns.barplot(data=results_df, x="Model", y=metric, palette="coolwarm", ax=ax)
+        ax.set_title(f"{metric} Comparison Across Models")
+        ax.set_ylabel(metric)
+        ax.set_xlabel("Model")
+        st.pyplot(fig)
 
     # --- Confusion matrices ---
     st.markdown("### 🔢 Confusion Matrices")
@@ -157,7 +170,7 @@ if uploaded_file is not None:
         st.write(f"**{name}**")
         st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
 
-    st.info("✅ Evaluation complete! Metrics, confusion matrices, and classification reports displayed for all models.")
+    st.info("✅ Evaluation complete! Metrics, charts, confusion matrices, and classification reports displayed for all models.")
 else:
     st.warning("Please upload your test_data.csv file to begin evaluation.")
 
