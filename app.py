@@ -32,13 +32,9 @@ if "target" not in df.columns:
 
 # --- Clean and preprocess ---
 # Encode categorical columns (features)
-for col in df.select_dtypes(include=["object"]).columns:
-    if col != "target":
-        df[col] = LabelEncoder().fit_transform(df[col])
-
-# Encode target if categorical
-if df["target"].dtype == "object":
-    df["target"] = LabelEncoder().fit_transform(df["target"])
+for col in df.columns:
+    if df[col].dtype == "object":
+        df[col] = LabelEncoder().fit_transform(df[col].astype(str))
 
 # Handle missing values
 df = df.fillna(df.mean(numeric_only=True))
@@ -74,44 +70,4 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, r
 
 if scale_features:
     scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-
-# --- Model evaluation ---
-models_dict = {
-    "Logistic Regression": LogisticRegression(C=log_reg_c, max_iter=1000),
-    "Decision Tree": DecisionTreeClassifier(max_depth=tree_depth),
-    "KNN": KNeighborsClassifier(n_neighbors=knn_k),
-    "Naive Bayes": GaussianNB(),
-    "SVM": SVC(C=svm_c, probability=True)
-}
-
-results = []
-for name in selected_models:
-    model = models_dict[name]
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
-    metrics = {
-        "Model": name,
-        "Accuracy": accuracy_score(y_test, y_pred),
-        "AUC": roc_auc_score(y_test, y_prob) if y_prob is not None else "N/A",
-        "Precision": precision_score(y_test, y_pred, average="weighted"),
-        "Recall": recall_score(y_test, y_pred, average="weighted"),
-        "F1": f1_score(y_test, y_pred, average="weighted"),
-        "MCC": matthews_corrcoef(y_test, y_pred)
-    }
-    results.append(metrics)
-
-summary_df = pd.DataFrame(results)[["Model"] + selected_metrics]
-
-# --- Display results ---
-st.subheader("Model Evaluation Results")
-st.dataframe(summary_df)
-
-st.subheader("Metric Comparison Chart")
-for metric in selected_metrics:
-    fig, ax = plt.subplots()
-    sns.barplot(data=summary_df, x="Model", y=metric, ax=ax)
-    ax.set_title(f"{metric} Comparison Across Models")
-    st.pyplot(fig)
+    X_train
