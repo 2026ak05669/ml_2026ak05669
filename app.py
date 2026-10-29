@@ -14,10 +14,9 @@ import seaborn as sns
 import json
 from io import BytesIO
 from matplotlib.backends.backend_pdf import PdfPages
-from datetime import datetime
 from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score,
-    matthews_corrcoef, roc_auc_score
+    confusion_matrix, classification_report, accuracy_score, precision_score,
+    recall_score, f1_score, matthews_corrcoef, roc_auc_score, roc_curve
 )
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -68,19 +67,34 @@ selected_models = st.sidebar.multiselect(
     default=["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM"]
 )
 
-# Sidebar evaluator notes
-evaluator_notes = st.sidebar.text_area("Evaluator Notes (will be added to PDF)", "")
+# Sidebar save/load configuration
+st.sidebar.header("Save/Load Configuration")
+config_name = st.sidebar.text_input("Configuration Name", "default_config")
 
-# Sidebar cover page details
-st.sidebar.header("PDF Cover Page")
-cover_title = st.sidebar.text_input("Report Title", "Model Evaluation Report")
-cover_author = st.sidebar.text_input("Author", "Evaluator")
-cover_date = st.sidebar.text_input("Date", datetime.now().strftime("%d %B %Y"))
+if st.sidebar.button("Save Configuration"):
+    config = {
+        "knn_k": knn_k,
+        "tree_depth": tree_depth,
+        "svm_c": svm_c,
+        "log_reg_c": log_reg_c,
+        "scale_features": scale_features,
+        "split_ratio": split_ratio,
+        "selected_metrics": selected_metrics,
+        "selected_models": selected_models,
+        "view_choice": view_choice,
+        "model_choice": st.session_state.get("model_choice", "All Models")
+    }
+    with open(f"{config_name}.json", "w") as f:
+        json.dump(config, f)
+    st.sidebar.success(f"Configuration '{config_name}' saved!")
+
+# Batch load configs
+batch_files = st.sidebar.file_uploader("Batch Load Configurations", type="json", accept_multiple_files=True)
 
 # Sidebar toggles for visualization/export
 show_batch_chart = st.sidebar.checkbox("Show Batch Comparison Chart", value=True)
 export_chart = st.sidebar.checkbox("Enable Chart Export (PNG)", value=True)
-export_pdf = st.sidebar.checkbox("Export Full Report (Cover + Charts + Tables + Notes) as PDF", value=True)
+export_pdf = st.sidebar.checkbox("Export All Batch Charts + Tables as PDF", value=True)
 
 model_choice = st.selectbox("Choose Model",
     ["Logistic Regression", "Decision Tree", "KNN", "Naive Bayes", "SVM", "All Models"],
@@ -138,7 +152,7 @@ if uploaded_file:
     df = pd.read_csv(uploaded_file)
 
     # Run batch configs if provided
-    if batch_files := st.sidebar.file_uploader("Batch Load Configurations", type="json", accept_multiple_files=True):
+    if batch_files:
         st.subheader("Batch Configuration Results")
         batch_results = {}
         for file in batch_files:
@@ -159,16 +173,6 @@ if uploaded_file:
 
             pdf_buf = BytesIO()
             with PdfPages(pdf_buf) as pdf:
-                # Cover page
-                if export_pdf:
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    ax.axis("off")
-                    ax.text(0.5, 0.7, cover_title, fontsize=20, weight="bold", ha="center")
-                    ax.text(0.5, 0.5, f"Author: {cover_author}", fontsize=12, ha="center")
-                    ax.text(0.5, 0.4, f"Date: {cover_date}", fontsize=12, ha="center")
-                    pdf.savefig(fig)
-                    plt.close(fig)
-
                 for metric in selected_metrics:
                     fig, ax = plt.subplots()
                     sns.barplot(data=combined_df, x="Model", y=metric, hue="Config", ax=ax)
@@ -206,18 +210,9 @@ if uploaded_file:
                         pdf.savefig(fig)
                         plt.close(fig)
 
-                # Add evaluator notes to PDF
-                if export_pdf and evaluator_notes.strip():
-                    fig, ax = plt.subplots(figsize=(8, 4))
-                    ax.axis("off")
-                    ax.text(0.05, 0.95, "Evaluator Notes", fontsize=12, weight="bold", va="top")
-                    ax.text(0.05, 0.85, evaluator_notes, fontsize=10, va="top", wrap=True)
-                    pdf.savefig(fig)
-                    plt.close(fig)
-
             if export_pdf:
                 st.download_button(
-                    label="Download Full Report (Cover + Charts + Tables + Notes) as PDF",
+                    label="Download All Charts + Tables as PDF",
                     data=pdf_buf.getvalue(),
                     file_name="batch_comparison_report.pdf",
                     mime="application/pdf"
