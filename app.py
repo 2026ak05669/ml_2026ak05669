@@ -34,7 +34,7 @@ with st.sidebar:
         csv_bytes = f.read()
         b64 = base64.b64encode(csv_bytes).decode()
         href = f'<a href="data:file/csv;base64,{b64}" target="_blank">Open CSV in a new tab</a>'
-        st.markdown(href, unsafe_allow_html=True)
+        st.markdown("[Open CSV in a new tab](test_data.csv)", unsafe_allow_html=True)
 
     st.info("If an embedded preview blocks saving, open the local app in your regular browser. The same sample is also in the project folder.")
 
