@@ -103,4 +103,97 @@ if uploaded_file is not None:
         st.stop()
     elif len(unique_targets) > 2:
         median_val = test_df["target"].median()
-        test_df["target"] = (test_df["target"] >=
+        test_df["target"] = (test_df["target"] >= median_val).astype(int)
+        st.warning("Target column converted to binary (>= median → 1, < median → 0) for classification.")
+
+    X = test_df.drop("target", axis=1)
+    y = test_df["target"]
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # --- Define models ---
+    models = {
+        "Logistic Regression": LogisticRegression(max_iter=1000),
+        "Decision Tree": DecisionTreeClassifier(),
+        "KNN": KNeighborsClassifier(),
+        "Naive Bayes": GaussianNB(),
+        "SVM": SVC(probability=True)
+    }
+
+    results = []
+    reports = {}
+
+    # --- Evaluate each model safely ---
+    for name, model in models.items():
+        try:
+            model.fit(X_scaled, y)
+            y_pred = model.predict(X_scaled)
+            y_prob = model.predict_proba(X_scaled)[:, 1] if hasattr(model, "predict_proba") else None
+
+            metrics = {
+                "Model": name,
+                "Accuracy": accuracy_score(y, y_pred),
+                "Precision": precision_score(y, y_pred, average="weighted"),
+                "Recall": recall_score(y, y_pred, average="weighted"),
+                "F1 Score": f1_score(y, y_pred, average="weighted"),
+                "MCC": matthews_corrcoef(y, y_pred),
+                "AUC": roc_auc_score(y, y_prob) if y_prob is not None else "N/A"
+            }
+            results.append(metrics)
+
+            reports[name] = {
+                "Confusion Matrix": confusion_matrix(y, y_pred),
+                "Classification Report": classification_report(y, y_pred, output_dict=True)
+            }
+        except ValueError as e:
+            st.error(f"⚠️ {name} could not be trained: {e}")
+
+    # --- Metrics table ---
+    if results:
+        st.markdown("### 📊 Evaluation Metrics Across Models")
+        results_df = pd.DataFrame(results)
+        st.dataframe(results_df)
+
+        # --- Download results ---
+        csv_data = results_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="⬇️ Download Evaluation Results (CSV)",
+            data=csv_data,
+            file_name="evaluation_results.csv",
+            mime="text/csv"
+        )
+
+        # --- Visual comparison charts ---
+        st.markdown("### 📈 Visual Comparison Charts")
+        for metric in ["Accuracy", "F1 Score", "AUC"]:
+            fig, ax = plt.subplots()
+            sns.barplot(data=results_df, x="Model", y=metric, palette="coolwarm", ax=ax)
+            ax.set_title(f"{metric} Comparison Across Models")
+            ax.set_ylabel(metric)
+            ax.set_xlabel("Model")
+            st.pyplot(fig)
+
+        # --- Confusion matrices ---
+        st.markdown("### 🔢 Confusion Matrices")
+        for name, report in reports.items():
+            st.write(f"**{name}**")
+            cm = report["Confusion Matrix"]
+            fig, ax = plt.subplots()
+            sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
+            ax.set_xlabel("Predicted")
+            ax.set_ylabel("Actual")
+            st.pyplot(fig)
+
+        # --- Classification reports ---
+        st.markdown("### 🧾 Classification Reports")
+        for name, report in reports.items():
+            st.write(f"**{name}**")
+            st.dataframe(pd.DataFrame(report["Classification Report"]).transpose())
+
+        st.info("✅ Evaluation complete! Metrics, charts, confusion matrices, and classification reports displayed for all models.")
+else:
+    st.warning("Please upload your test_data.csv file to begin evaluation.")
+
+st.markdown("---")
+st.markdown("Built with ❤️ using Streamlit")
